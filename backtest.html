@@ -1,0 +1,1477 @@
+<!DOCTYPE html>
+<html lang="vi">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pro Backtest Dashboard - IMXUSDT</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lightweight-charts@4.2.2-rc1/dist/lightweight-charts.standalone.production.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.0/papaparse.min.js"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <link rel="stylesheet" href="style.css">
+    <style>
+        body { background-color: #0a0e1a; color: #d1d4dc; }
+        .card { background-color: #131722; border-radius: 0.5rem; border: 1px solid #2a2e39; margin-bottom: 1.5rem; }
+        .btn { padding: 0.5rem 1rem; border-radius: 0.375rem; display: inline-flex; align-items: center; gap: 0.5rem; font-size: 0.875rem; cursor: pointer; transition: background-color 0.2s; }
+        .btn-primary { background-color: #2962ff; color: white; } .btn-primary:hover { background-color: #0039cb; }
+        .btn-success { background-color: #26a69a; color: white; } .btn-success:hover { background-color: #1e8075; }
+        .input-field { background-color: #2a2e39; border: 1px solid #4a4e59; color: #d1d4dc; padding: 0.5rem; border-radius: 0.375rem; width: 100%; margin-top: 0.25rem;}
+        .tab-nav { display: flex; border-bottom: 1px solid #2a2e39; }
+        .tab-item { padding: 0.75rem 1rem; cursor: pointer; border-bottom: 2px solid transparent; color: #8a8e99; }
+        .tab-item.active { border-color: #2962ff; color: #d1d4dc; font-weight: 500; }
+        .tab-panel { display: none; } .tab-panel.active { display: block; }
+        .indicator-card { background-color: #1a1e2b; padding: 1rem; border-radius: 0.375rem; border: 1px solid #2a2e39;}
+        .section-title { font-size: 1.125rem; font-weight: 600; margin-bottom: 1rem; display: flex; align-items: center; gap: 0.5rem; }
+        .positions-table { width: 100%; border-collapse: collapse; font-size: 0.875rem; }
+        .positions-table th, .positions-table td { padding: 0.75rem; text-align: left; border-bottom: 1px solid #2a2e39; }
+        .positions-table th { background-color: #1a1e2b; font-weight: 500; color: #8a8e99; }
+        .trade-badge { padding: 0.25rem 0.5rem; border-radius: 9999px; font-size: 0.75rem; font-weight: 600; text-transform: uppercase; }
+        .trade-long { background-color: rgba(38, 166, 154, 0.2); color: #26a69a; }
+        .trade-short { background-color: rgba(239, 83, 80, 0.2); color: #ef5350; }
+        .positive { color: #26a69a; } .negative { color: #ef5350; }
+        .metric-card { background-color: #1a1e2b; padding: 0.75rem; border-radius: 0.375rem; text-align: center; }
+        .metric-label { display: block; font-size: 0.8rem; color: #8a8e99; margin-bottom: 0.25rem; }
+        .metric-value { font-size: 1.1rem; font-weight: 600; }
+        .notification-area { max-height: 300px; overflow-y: auto; }
+        .notification-item { display: flex; gap: 0.75rem; padding: 0.75rem 0; border-bottom: 1px solid #2a2e39; }
+        .notification-item:last-child { border-bottom: none; }
+        .checkbox-wrapper { display: flex; align-items: center; gap: 0.5rem; }
+        .tooltip { position: relative; display: inline-block; }
+        .tooltip .tooltip-text { visibility: hidden; width: 160px; background-color: #2a2e39; color: #fff; text-align: center; border-radius: 6px; padding: 5px 8px; position: absolute; z-index: 1; bottom: 125%; left: 50%; margin-left: -80px; opacity: 0; transition: opacity 0.3s; font-size: 0.75rem; }
+        .tooltip:hover .tooltip-text { visibility: visible; opacity: 1; }
+        .chart-wrapper { position: relative; height: 400px; /* Default height */ }
+        /* Add any styles from your style.css here if needed */
+    </style>
+</head>
+
+<body class="bg-gray-900 text-gray-200">
+    <div class="dashboard-container">
+        <header class="border-b border-gray-700 bg-gray-800 py-3 sticky top-0 z-10">
+            <div class="container mx-auto px-4 flex justify-between items-center">
+                <div class="flex items-center">
+                    <h1 class="text-xl font-bold flex items-center">
+                        <i data-lucide="bar-chart-2" class="h-6 w-6 mr-2 text-blue-500"></i>
+                        ProBacktest
+                    </h1>
+                    <div class="ml-8 flex items-center">
+                        <span class="text-sm text-gray-400 mr-2">Symbol:</span>
+                        <span class="bg-blue-900/30 text-blue-400 py-1 px-3 rounded-md font-medium">IMXUSDT</span>
+                        <span class="text-sm text-gray-400 mx-2">Timeframe:</span>
+                        <span class="bg-blue-900/30 text-blue-400 py-1 px-3 rounded-md font-medium">15m</span>
+                    </div>
+                </div>
+                <div class="flex items-center gap-4">
+                    <button id="btnUpload" class="btn bg-gray-700 hover:bg-gray-600 text-white text-sm">
+                        <i data-lucide="upload" class="h-4 w-4"></i>
+                        Upload Data
+                    </button>
+                    <button class="btn bg-blue-600 hover:bg-blue-700 text-white text-sm">
+                        <i data-lucide="save" class="h-4 w-4"></i>
+                        Save Strategy
+                    </button>
+                </div>
+            </div>
+        </header>
+
+        <main class="container mx-auto px-4 py-6">
+            <div class="grid grid-cols-12 gap-6">
+                <div class="col-span-12 lg:col-span-8">
+                    <div class="card p-0"> <div id="chart-container" class="chart-wrapper"></div>
+                         <div class="p-4"> <div class="flex items-center justify-between mt-4 border-t border-gray-700 pt-4">
+                                <div class="flex items-center gap-3">
+                                    <button id="playPauseBtn" disabled class="btn btn-primary">
+                                        <i id="playPauseIcon" data-lucide="play" class="h-4 w-4"></i>
+                                        <span id="playPauseText">Bắt đầu</span>
+                                    </button>
+                                    <button id="resetBtn" disabled class="btn bg-amber-500 hover:bg-amber-600 text-white">
+                                        <i data-lucide="rotate-ccw" class="h-4 w-4"></i>
+                                        <span>Reset</span>
+                                    </button>
+                                </div>
+                                <div class="flex items-center gap-4">
+                                    <div class="flex items-center gap-2">
+                                        <i data-lucide="gauge" class="h-5 w-5 text-gray-400"></i>
+                                        <input type="range" id="speedSlider" min="1" max="100" value="50" class="slider w-32 accent-blue-500">
+                                        <span id="speedValue" class="text-sm font-medium text-gray-300 w-20">Tốc độ: 50%</span>
+                                    </div>
+                                    <div class="relative">
+                                        <button class="btn bg-gray-700 hover:bg-gray-600 text-white">
+                                            <i data-lucide="settings" class="h-4 w-4"></i>
+                                            <span>Cài đặt</span>
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                            <div id="statusArea" class="mt-2 text-center text-sm text-gray-400">
+                                Đang tải dữ liệu mặc định...
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="card mt-6">
+                        <div class="tab-nav">
+                            <div class="tab-item active" data-tab="indicators">
+                                <i data-lucide="trending-up" class="h-4 w-4 inline-block mr-1"></i>
+                                Chỉ báo
+                            </div>
+                            <div class="tab-item" data-tab="strategy">
+                                <i data-lucide="code" class="h-4 w-4 inline-block mr-1"></i>
+                                Chiến lược
+                            </div>
+                            <div class="tab-item" data-tab="trades">
+                                <i data-lucide="list" class="h-4 w-4 inline-block mr-1"></i>
+                                Giao dịch
+                            </div>
+                        </div>
+
+                        <div class="p-4">
+                            <div class="tab-panel active" id="indicators-tab">
+                                <div class="section-title">
+                                    <i data-lucide="bar-chart" class="h-5 w-5"></i>
+                                    Chỉ báo kỹ thuật
+                                </div>
+                                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                                    <div class="indicator-card">
+                                        <div class="flex items-center justify-between mb-3">
+                                            <div class="checkbox-wrapper">
+                                                <input type="checkbox" id="emaEnabled" checked class="accent-blue-500">
+                                                <label for="emaEnabled" class="font-medium">EMA</label>
+                                            </div>
+                                            <div class="flex items-center">
+                                                <span class="h-3 w-8 bg-orange-500 rounded-sm mr-2"></span>
+                                                <div class="tooltip">
+                                                    <i data-lucide="info" class="h-4 w-4 text-gray-400"></i>
+                                                    <span class="tooltip-text text-xs">Exponential Moving Average đặt trọng số cao hơn cho giá gần đây</span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div class="flex items-center gap-2">
+                                            <label for="emaPeriodInput" class="text-sm text-gray-400">Chu kỳ:</label>
+                                            <input type="number" id="emaPeriodInput" value="20" min="2" max="200" class="input-field text-center max-w-[80px]">
+                                        </div>
+                                    </div>
+                                    <div class="indicator-card">
+                                        <div class="flex items-center justify-between mb-3">
+                                            <div class="checkbox-wrapper">
+                                                <input type="checkbox" id="donchianEnabled" checked class="accent-blue-500">
+                                                <label for="donchianEnabled" class="font-medium">Donchian Channel</label>
+                                            </div>
+                                            <div class="flex items-center">
+                                                <span class="h-3 w-8 bg-teal-500 rounded-sm mr-2"></span>
+                                                <div class="tooltip">
+                                                    <i data-lucide="info" class="h-4 w-4 text-gray-400"></i>
+                                                    <span class="tooltip-text text-xs">Kênh giá dựa trên giá cao nhất và thấp nhất trong một khoảng thời gian</span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div class="flex items-center gap-2">
+                                            <label for="donchianPeriodInput" class="text-sm text-gray-400">Chu kỳ:</label>
+                                            <input type="number" id="donchianPeriodInput" value="20" min="2" max="200" class="input-field text-center max-w-[80px]">
+                                        </div>
+                                    </div>
+                                    <div class="indicator-card">
+                                        <div class="flex items-center justify-between mb-3">
+                                            <div class="checkbox-wrapper">
+                                                <input type="checkbox" id="lwmaEnabled" checked class="accent-blue-500">
+                                                <label for="lwmaEnabled" class="font-medium">LWMA</label>
+                                            </div>
+                                            <div class="flex items-center">
+                                                <span class="h-3 w-8 bg-blue-500 rounded-sm mr-2"></span>
+                                                <div class="tooltip">
+                                                    <i data-lucide="info" class="h-4 w-4 text-gray-400"></i>
+                                                    <span class="tooltip-text text-xs">Linear Weighted Moving Average sử dụng trọng số tuyến tính</span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div class="flex flex-col gap-2">
+                                            <div class="flex items-center gap-2">
+                                                <label for="lwmaPeriodInput" class="text-sm text-gray-400">Chu kỳ:</label>
+                                                <input type="number" id="lwmaPeriodInput" value="14" min="2" max="200" class="input-field text-center max-w-[80px]">
+                                            </div>
+                                            <div>
+                                                <label for="lwmaWeightsInput" class="text-xs text-gray-400">Trọng số tùy chỉnh:</label>
+                                                <input type="text" id="lwmaWeightsInput" placeholder="VD: 14,13,12,..." class="input-field mt-1 text-sm">
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="flex justify-end mt-4">
+                                    <button id="updateIndicatorsBtn" disabled class="btn btn-primary">
+                                        <i data-lucide="refresh-cw" class="h-4 w-4"></i>
+                                        <span>Cập nhật chỉ báo</span>
+                                    </button>
+                                </div>
+                            </div>
+
+                            <div class="tab-panel" id="strategy-tab">
+                                <div class="section-title">
+                                    <i data-lucide="code" class="h-5 w-5"></i>
+                                    Chiến lược giao dịch
+                                </div>
+                                <div class="strategy-card bg-gray-800/50 p-4 rounded-lg mb-4">
+                                    <h3 class="font-medium mb-3">Điều kiện vào lệnh (Hiện tại đang cố định trong code)</h3>
+                                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                        <div class="border border-green-800/40 bg-green-900/10 rounded-md p-3">
+                                             <div class="flex items-center mb-2">
+                                                <span class="trade-badge trade-long mr-2">LONG</span>
+                                                <h4 class="font-medium">Điều kiện vào Long</h4>
+                                            </div>
+                                            <select class="input-field mb-2" disabled> <option>Giá đóng cửa vượt lên trên EMA</option>
+                                                <option>Giá đóng cửa vượt lên trên LWMA</option>
+                                                <option>Giá chạm kênh trên Donchian</option>
+                                                <option selected>Tùy chỉnh (close > EMA && LWMA > Donchian Middle)</option>
+                                            </select>
+                                            <div class="bg-black/20 p-2 rounded-md text-xs font-mono text-gray-300">
+                                                close > ema && lwma > donchianMiddle
+                                            </div>
+                                        </div>
+                                        <div class="border border-red-800/40 bg-red-900/10 rounded-md p-3">
+                                             <div class="flex items-center mb-2">
+                                                <span class="trade-badge trade-short mr-2">SHORT</span>
+                                                <h4 class="font-medium">Điều kiện vào Short</h4>
+                                            </div>
+                                            <select class="input-field mb-2" disabled> <option>Giá đóng cửa giảm xuống dưới EMA</option>
+                                                <option>Giá đóng cửa giảm xuống dưới LWMA</option>
+                                                <option>Giá chạm kênh dưới Donchian</option>
+                                                <option selected>Tùy chỉnh (close < EMA && LWMA < Donchian Middle)</option>
+                                            </select>
+                                            <div class="bg-black/20 p-2 rounded-md text-xs font-mono text-gray-300">
+                                                close < ema && lwma < donchianMiddle
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="strategy-card bg-gray-800/50 p-4 rounded-lg">
+                                    <h3 class="font-medium mb-3">Quản lý vốn & rủi ro (Cố định trong code)</h3>
+                                     <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
+                                        <div>
+                                            <label class="text-sm text-gray-400">Số vốn ban đầu</label>
+                                            <input type="number" id="initialBalanceInput" value="1000" class="input-field">
+                                        </div>
+                                        <div>
+                                            <label class="text-sm text-gray-400">% Vốn mỗi lệnh</label>
+                                            <input type="number" id="orderSizePercentInput" value="10" class="input-field">
+                                        </div>
+                                        <div>
+                                            <label class="text-sm text-gray-400">Take Profit (%)</label>
+                                            <input type="number" id="takeProfitPercentInput" value="2.5" step="0.1" class="input-field">
+                                        </div>
+                                        <div>
+                                            <label class="text-sm text-gray-400">Stop Loss (%)</label>
+                                            <input type="number" id="stopLossPercentInput" value="1.5" step="0.1" class="input-field">
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="flex justify-end mt-4">
+                                    <button class="btn btn-success" onclick="alert('Chức năng chạy chiến lược theo cài đặt UI chưa được phát triển. Sử dụng nút Bắt đầu/Dừng trên biểu đồ.')">
+                                        <i data-lucide="play" class="h-4 w-4"></i>
+                                        <span>Chạy chiến lược (Theo cài đặt)</span>
+                                    </button>
+                                </div>
+                            </div>
+
+                            <div class="tab-panel" id="trades-tab">
+                                <div class="section-title flex justify-between items-center">
+                                    <div>
+                                        <i data-lucide="list" class="h-5 w-5"></i>
+                                        Lịch sử giao dịch
+                                    </div>
+                                    <div class="text-sm">
+                                        <span id="trade-count" class="font-medium">0</span> giao dịch
+                                    </div>
+                                </div>
+                                <div class="overflow-x-auto max-h-96">
+                                    <table class="positions-table">
+                                        <thead>
+                                            <tr>
+                                                <th>#</th>
+                                                <th>Loại</th>
+                                                <th>Giá vào</th>
+                                                <th>Giá ra</th>
+                                                <th>Lý do đóng</th>
+                                                <th>Lợi nhuận (%)</th>
+                                                <th>Thời gian giữ</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="trade-history-body">
+                                            </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-span-12 lg:col-span-4">
+                    <div class="card p-4 mb-6">
+                        <div class="section-title">
+                            <i data-lucide="trending-up" class="h-5 w-5"></i>
+                            Hiệu suất
+                        </div>
+                        <div class="bg-gray-800/50 rounded-lg p-4 mb-4">
+                            <div class="flex items-center justify-between">
+                                <div>
+                                    <div class="text-sm text-gray-400">Số dư hiện tại</div>
+                                    <div id="current-balance" class="text-2xl font-bold">1000.00 USDT</div>
+                                </div>
+                                <div class="text-right">
+                                    <div class="text-sm text-gray-400">Lợi nhuận</div>
+                                    <div id="profit-percentage" class="text-xl font-bold text-gray-400">+0.00%</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="grid grid-cols-2 gap-4 mb-6">
+                             <div class="metric-card">
+                                <span class="metric-label">Tổng giao dịch</span>
+                                <span id="metric-total-trades" class="metric-value">0</span>
+                            </div>
+                            <div class="metric-card">
+                                <span class="metric-label">Tỷ lệ thắng</span>
+                                <span id="metric-win-rate" class="metric-value positive">0%</span>
+                            </div>
+                            <div class="metric-card">
+                                <span class="metric-label">Profit Factor</span>
+                                <span id="metric-profit-factor" class="metric-value">0.0</span>
+                            </div>
+                            <div class="metric-card">
+                                <span class="metric-label">Drawdown tối đa</span>
+                                <span id="metric-max-drawdown" class="metric-value negative">-0.0%</span>
+                            </div>
+                        </div>
+
+                         <div class="border-t border-gray-700 pt-4">
+                            <div class="section-title text-base">
+                                <i data-lucide="pie-chart" class="h-5 w-5"></i>
+                                Phân tích giao dịch
+                            </div>
+                            <div class="flex items-center justify-between mb-1">
+                                <div class="text-sm">Tỷ lệ Long/Short</div>
+                                <div id="long-short-counts" class="text-sm">0 / 0</div>
+                            </div>
+                            <div class="bg-gray-700 rounded-full h-2 mb-4 w-full">
+                                <div id="long-short-ratio-bar" class="bg-green-500 h-2 rounded-l-full" style="width: 50%"></div>
+                                <div id="short-long-ratio-bar" class="bg-red-500 h-2 rounded-r-full" style="width: 50%; float: right; margin-top: -8px;"></div> </div>
+
+                             <div class="flex items-center justify-between mb-1">
+                                <div class="text-sm">Tỷ lệ TP/SL</div>
+                                <div id="tp-sl-counts" class="text-sm">0 / 0</div>
+                            </div>
+                            <div class="bg-gray-700 rounded-full h-2 mb-4 w-full">
+                                <div id="tp-sl-ratio-bar" class="bg-blue-500 h-2 rounded-l-full" style="width: 50%"></div>
+                                 <div id="sl-tp-ratio-bar" class="bg-amber-500 h-2 rounded-r-full" style="width: 50%; float: right; margin-top: -8px;"></div> </div>
+
+                            <div id="trade-duration-chart" class="h-40 mb-4">
+                                <div class="text-center text-gray-500 text-sm h-full flex items-center justify-center">Biểu đồ thời gian giữ lệnh (chưa phát triển)</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div id="active-position-card" class="card p-4 mb-6" style="display: none;"> <div class="section-title flex justify-between items-center">
+                            <div>
+                                <i data-lucide="activity" class="h-5 w-5"></i>
+                                Vị thế hiện tại
+                            </div>
+                            <span id="active-pos-badge" class="trade-badge trade-long">LONG</span>
+                        </div>
+                        <div class="grid grid-cols-2 gap-4 mt-4">
+                            <div>
+                                <div class="text-sm text-gray-400">Giá vào</div>
+                                <div id="active-pos-entry" class="font-medium">0.0000 USDT</div>
+                            </div>
+                             <div>
+                                <div class="text-sm text-gray-400">Thời gian giữ</div>
+                                <div id="active-pos-duration" class="font-medium">0 phút</div>
+                            </div>
+                            <div>
+                                <div class="text-sm text-gray-400">Take Profit</div>
+                                <div id="active-pos-tp" class="font-medium text-green-500">0.0000 USDT</div>
+                            </div>
+                            <div>
+                                <div class="text-sm text-gray-400">Stop Loss</div>
+                                <div id="active-pos-sl" class="font-medium text-red-500">0.0000 USDT</div>
+                            </div>
+                        </div>
+                         <div class="mt-4">
+                            <div class="flex justify-between items-center mb-2">
+                                <div class="text-sm text-gray-400">Lợi nhuận hiện tại</div>
+                                <div id="active-pos-pnl" class="font-medium text-green-500">+0.00%</div>
+                            </div>
+                            <div class="bg-gray-700 rounded-full h-2 w-full">
+                                <div id="active-pos-progress" class="bg-green-500 h-2 rounded-full" style="width: 0%"></div>
+                            </div>
+                        </div>
+                        <div class="flex justify-between mt-4">
+                            <button class="btn bg-amber-500 hover:bg-amber-600 text-white" disabled>
+                                <i data-lucide="edit-3" class="h-4 w-4"></i>
+                                <span>Chỉnh sửa (N/A)</span>
+                            </button>
+                             <button class="btn bg-red-600 hover:bg-red-700 text-white" onclick="alert('Chức năng đóng lệnh thủ công chưa phát triển.')">
+                                <i data-lucide="x" class="h-4 w-4"></i>
+                                <span>Đóng vị thế</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="card p-4">
+                        <div class="section-title">
+                            <i data-lucide="bell" class="h-5 w-5"></i>
+                            Thông báo
+                        </div>
+                        <div class="notification-area">
+                            </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        // Initialize Lucide icons
+        lucide.createIcons();
+
+        // Global variables
+        let chartData = [];
+        let currentCandle = 0;
+        let isPlaying = false;
+        let playbackSpeed = 50; // Default speed percentage
+        let playbackInterval;
+        let currentPosition = null;
+        let trades = [];
+        let initialBalance = 1000;
+        let accountBalance = initialBalance;
+        let metrics = {
+            totalTrades: 0,
+            winningTrades: 0,
+            losingTrades: 0,
+            winRate: 0,
+            grossProfit: 0,
+            grossLoss: 0,
+            profitFactor: 0,
+            peakBalance: initialBalance,
+            maxDrawdown: 0,
+            longTrades: 0,
+            shortTrades: 0,
+            tpHits: 0,
+            slHits: 0
+        };
+
+        // Strategy Parameters (can be linked to UI later)
+        let orderSizePercent = 0.10; // 10%
+        let takeProfitPercent = 0.025; // 2.5%
+        let stopLossPercent = 0.015; // 1.5%
+
+        // DOM elements
+        const chartContainer = document.getElementById('chart-container');
+        const playPauseBtn = document.getElementById('playPauseBtn');
+        const playPauseIcon = document.getElementById('playPauseIcon');
+        const playPauseText = document.getElementById('playPauseText');
+        const resetBtn = document.getElementById('resetBtn');
+        const speedSlider = document.getElementById('speedSlider');
+        const statusArea = document.getElementById('statusArea');
+        const updateIndicatorsBtn = document.getElementById('updateIndicatorsBtn');
+        const btnUpload = document.getElementById('btnUpload'); // Corrected selector usage
+        const tradeHistoryBody = document.getElementById('trade-history-body');
+        const activePositionCard = document.getElementById('active-position-card');
+        const currentBalanceEl = document.getElementById('current-balance');
+        const profitPercentageEl = document.getElementById('profit-percentage');
+        const metricTotalTradesEl = document.getElementById('metric-total-trades');
+        const metricWinRateEl = document.getElementById('metric-win-rate');
+        const metricProfitFactorEl = document.getElementById('metric-profit-factor');
+        const metricMaxDrawdownEl = document.getElementById('metric-max-drawdown');
+        const longShortCountsEl = document.getElementById('long-short-counts');
+        const longShortRatioBarEl = document.getElementById('long-short-ratio-bar');
+        const shortLongRatioBarEl = document.getElementById('short-long-ratio-bar');
+        const tpSlCountsEl = document.getElementById('tp-sl-counts');
+        const tpSlRatioBarEl = document.getElementById('tp-sl-ratio-bar');
+        const slTpRatioBarEl = document.getElementById('sl-tp-ratio-bar');
+        const tradeCountEl = document.getElementById('trade-count');
+        const notificationArea = document.querySelector('.notification-area');
+
+        // Active Position Elements
+        const activePosBadge = document.getElementById('active-pos-badge');
+        const activePosEntry = document.getElementById('active-pos-entry');
+        const activePosDuration = document.getElementById('active-pos-duration');
+        const activePosTp = document.getElementById('active-pos-tp');
+        const activePosSl = document.getElementById('active-pos-sl');
+        const activePosPnl = document.getElementById('active-pos-pnl');
+        const activePosProgress = document.getElementById('active-pos-progress');
+
+        // Chart setup
+        const chart = LightweightCharts.createChart(chartContainer, {
+            width: chartContainer.clientWidth,
+            height: chartContainer.clientHeight, // Use clientHeight for dynamic sizing
+            layout: { backgroundColor: '#131722', textColor: '#d1d4dc', },
+            grid: { vertLines: { color: 'rgba(42, 46, 57, 0.5)', }, horzLines: { color: 'rgba(42, 46, 57, 0.5)', }, },
+            crosshair: { mode: LightweightCharts.CrosshairMode.Normal, },
+            timeScale: { borderColor: 'rgba(197, 203, 206, 0.8)', timeVisible: true, secondsVisible: false, }, // Hide seconds for clarity
+            rightPriceScale: { borderColor: 'rgba(197, 203, 206, 0.8)', },
+            handleScroll: { mouseWheel: true, pressedMouseMove: true, }, handleScale: { mouseWheel: true, pinch: true, axisPressedMouseMove: true, },
+        });
+
+        // Series setup
+        const candleSeries = chart.addCandlestickSeries({
+             upColor: '#26a69a', downColor: '#ef5350', borderUpColor: '#26a69a', borderDownColor: '#ef5350', wickUpColor: '#26a69a', wickDownColor: '#ef5350',
+        });
+
+        const emaSeries = chart.addLineSeries({ color: '#FF9800', lineWidth: 2, priceLineVisible: false, lastValueVisible: true, title: 'EMA', crosshairMarkerVisible: false, });
+        const lwmaSeries = chart.addLineSeries({ color: '#2196F3', lineWidth: 2, priceLineVisible: false, lastValueVisible: true, title: 'LWMA', crosshairMarkerVisible: false, });
+        const donchianUpperSeries = chart.addLineSeries({ color: 'rgba(76, 175, 80, 0.8)', lineWidth: 1, priceLineVisible: false, lastValueVisible: true, title: 'DC Upper', crosshairMarkerVisible: false, });
+        const donchianMiddleSeries = chart.addLineSeries({ color: 'rgba(76, 175, 80, 0.4)', lineWidth: 1, priceLineVisible: false, lineStyle: LightweightCharts.LineStyle.Dotted, lastValueVisible: false, title: 'DC Middle', crosshairMarkerVisible: false, });
+        const donchianLowerSeries = chart.addLineSeries({ color: 'rgba(76, 175, 80, 0.8)', lineWidth: 1, priceLineVisible: false, lastValueVisible: true, title: 'DC Lower', crosshairMarkerVisible: false, });
+        // Using line series for markers allows placing them without affecting candle series data
+        const markersSeries = chart.addLineSeries({ color: 'transparent', lineWidth: 0, priceLineVisible: false, lastValueVisible: false, });
+
+
+        // Initialize UI event listeners
+        function initEventListeners() {
+            playPauseBtn.addEventListener('click', togglePlayPause);
+            resetBtn.addEventListener('click', resetBacktest);
+            speedSlider.addEventListener('input', updateSpeed);
+            updateIndicatorsBtn.addEventListener('click', updateIndicators);
+
+            // File upload handling
+            btnUpload.addEventListener('click', () => {
+                const fileInput = document.createElement('input');
+                fileInput.type = 'file';
+                fileInput.accept = '.csv';
+                fileInput.onchange = handleFileUpload;
+                fileInput.click();
+            });
+
+            // Tab switching
+            const tabItems = document.querySelectorAll('.tab-item');
+            const tabPanels = document.querySelectorAll('.tab-panel');
+            tabItems.forEach(item => {
+                item.addEventListener('click', () => {
+                    const tabId = item.getAttribute('data-tab');
+                    tabItems.forEach(tab => tab.classList.remove('active'));
+                    tabPanels.forEach(panel => panel.classList.remove('active'));
+                    item.classList.add('active');
+                    document.getElementById(`${tabId}-tab`).classList.add('active');
+                });
+            });
+
+            // Window resize handler - Debounced for performance
+            let resizeTimeout;
+            window.addEventListener('resize', () => {
+                clearTimeout(resizeTimeout);
+                resizeTimeout = setTimeout(() => {
+                     chart.applyOptions({
+                        width: chartContainer.clientWidth,
+                        height: chartContainer.clientHeight
+                    });
+                }, 200); // Adjust debounce delay as needed
+            });
+
+            // Sync parameters from UI (add listeners to inputs)
+             document.getElementById('initialBalanceInput').addEventListener('change', (e) => initialBalance = parseFloat(e.target.value) || 1000);
+             document.getElementById('orderSizePercentInput').addEventListener('change', (e) => orderSizePercent = (parseFloat(e.target.value) || 10) / 100);
+             document.getElementById('takeProfitPercentInput').addEventListener('change', (e) => takeProfitPercent = (parseFloat(e.target.value) || 2.5) / 100);
+             document.getElementById('stopLossPercentInput').addEventListener('change', (e) => stopLossPercent = (parseFloat(e.target.value) || 1.5) / 100);
+        }
+
+        // Play/Pause backtest
+        function togglePlayPause() {
+            isPlaying = !isPlaying;
+            if (isPlaying) {
+                playPauseIcon.dataset.lucide = 'pause';
+                playPauseText.textContent = 'Dừng';
+                lucide.createIcons({ icons: { pause: playPauseIcon } }); // Update icon
+                runBacktest();
+            } else {
+                playPauseIcon.dataset.lucide = 'play';
+                playPauseText.textContent = currentCandle > 0 && currentCandle < chartData.length ? 'Tiếp tục' : 'Bắt đầu';
+                lucide.createIcons({ icons: { play: playPauseIcon } }); // Update icon
+                clearInterval(playbackInterval);
+            }
+        }
+
+        // Reset backtest to beginning
+        function resetBacktest() {
+            if (isPlaying) {
+                togglePlayPause(); // Stop playback first
+            }
+            currentCandle = 0;
+            trades = [];
+            accountBalance = initialBalance; // Reset to initial balance from UI or default
+            currentPosition = null;
+            metrics = { // Reset metrics
+                 totalTrades: 0, winningTrades: 0, losingTrades: 0, winRate: 0, grossProfit: 0, grossLoss: 0,
+                 profitFactor: 0, peakBalance: initialBalance, maxDrawdown: 0, longTrades: 0, shortTrades: 0, tpHits: 0, slHits: 0
+            };
+
+            statusArea.textContent = 'Đã reset backtest. Nhấn "Bắt đầu" để chạy lại.';
+            markersSeries.setMarkers([]); // Clear markers from the dedicated series
+             if (tradeHistoryBody) tradeHistoryBody.innerHTML = ''; // Clear trade history table
+             if (activePositionCard) activePositionCard.style.display = 'none'; // Hide active position card
+
+             updateStats(); // Update UI stats to initial state
+
+             // Load data again if available to reset indicator lines etc.
+             if (chartData.length > 0) {
+                 loadChartData(chartData, false); // Pass false to avoid resetting again
+                 chart.timeScale().fitContent(); // Fit chart after reset
+             }
+             playPauseText.textContent = 'Bắt đầu'; // Ensure button text is correct
+        }
+
+
+        // Update playback speed
+        function updateSpeed() {
+            playbackSpeed = parseInt(speedSlider.value);
+            document.getElementById('speedValue').textContent = `Tốc độ: ${playbackSpeed}%`;
+            if (isPlaying) { // Restart interval with new speed if playing
+                clearInterval(playbackInterval);
+                runBacktest();
+            }
+        }
+
+        // Update indicators based on user inputs
+        function updateIndicators() {
+            if (!chartData || chartData.length === 0) return; // Need data to calculate
+
+            const emaEnabled = document.getElementById('emaEnabled').checked;
+            const emaPeriod = parseInt(document.getElementById('emaPeriodInput').value);
+            const lwmaEnabled = document.getElementById('lwmaEnabled').checked;
+            const lwmaPeriod = parseInt(document.getElementById('lwmaPeriodInput').value);
+            const lwmaWeightsStr = document.getElementById('lwmaWeightsInput').value;
+            const donchianEnabled = document.getElementById('donchianEnabled').checked;
+            const donchianPeriod = parseInt(document.getElementById('donchianPeriodInput').value);
+
+            // Update series visibility (apply immediately)
+            emaSeries.applyOptions({ visible: emaEnabled });
+            lwmaSeries.applyOptions({ visible: lwmaEnabled });
+            donchianUpperSeries.applyOptions({ visible: donchianEnabled });
+            donchianMiddleSeries.applyOptions({ visible: donchianEnabled });
+            donchianLowerSeries.applyOptions({ visible: donchianEnabled });
+
+
+            // Recalculate indicators and set data
+             try {
+                 if (emaEnabled && emaPeriod >= 2) {
+                    const emaData = calculateEMA(chartData, emaPeriod);
+                    emaSeries.setData(emaData);
+                 } else {
+                    emaSeries.setData([]); // Clear data if disabled or invalid period
+                 }
+
+                 if (lwmaEnabled) {
+                    let lwmaData;
+                    const weights = lwmaWeightsStr.split(',').map(w => parseFloat(w.trim())).filter(w => !isNaN(w));
+                    if (weights.length > 1) { // Use custom weights if provided and valid
+                        lwmaData = calculateCustomLWMA(chartData, weights);
+                    } else if (lwmaPeriod >= 2) { // Fallback to period if custom weights invalid/not provided
+                        lwmaData = calculateLWMA(chartData, lwmaPeriod);
+                    } else {
+                        lwmaData = []; // Clear if period invalid
+                    }
+                    lwmaSeries.setData(lwmaData);
+                 } else {
+                    lwmaSeries.setData([]);
+                 }
+
+                 if (donchianEnabled && donchianPeriod >= 2) {
+                    const donchianData = calculateDonchian(chartData, donchianPeriod);
+                    donchianUpperSeries.setData(donchianData.upper);
+                    donchianMiddleSeries.setData(donchianData.middle);
+                    donchianLowerSeries.setData(donchianData.lower);
+                 } else {
+                    donchianUpperSeries.setData([]);
+                    donchianMiddleSeries.setData([]);
+                    donchianLowerSeries.setData([]);
+                 }
+                 statusArea.textContent = 'Chỉ báo đã được cập nhật thành công!';
+            } catch (error) {
+                console.error("Lỗi khi tính toán hoặc cập nhật chỉ báo:", error);
+                statusArea.textContent = 'Lỗi khi cập nhật chỉ báo. Kiểm tra Console (F12).';
+                addNotification('alert-triangle', 'text-red-500', 'Lỗi Chỉ báo', `Lỗi: ${error.message}`, 'Vừa xong');
+            }
+        }
+
+
+        // Handle file upload for CSV data
+        function handleFileUpload(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            statusArea.textContent = `Đang đọc file ${file.name}...`;
+            const reader = new FileReader();
+            reader.onload = function (e) {
+                const csvData = e.target.result;
+                statusArea.textContent = 'Đang xử lý dữ liệu CSV...';
+                processCSVData(csvData);
+            };
+             reader.onerror = function() {
+                statusArea.textContent = 'Lỗi khi đọc file.';
+                 addNotification('alert-triangle', 'text-red-500', 'Lỗi Đọc File', `Không thể đọc file ${file.name}`, 'Vừa xong');
+            };
+            reader.readAsText(file);
+        }
+
+        // Process uploaded CSV data
+        function processCSVData(csvData) {
+            Papa.parse(csvData, {
+                header: true,
+                dynamicTyping: true, // Automatically convert types
+                skipEmptyLines: true,
+                complete: function (results) {
+                    if (results.errors.length > 0) {
+                         console.error("Lỗi Papaparse:", results.errors);
+                        statusArea.textContent = `Lỗi khi xử lý CSV: ${results.errors[0].message}`;
+                         addNotification('alert-triangle', 'text-red-500', 'Lỗi CSV', `Lỗi xử lý: ${results.errors[0].message}`, 'Vừa xong');
+                        return; // Stop processing on error
+                    }
+
+                    if (results.data && results.data.length > 0) {
+                         try {
+                            // Map CSV data to chart format { time, open, high, low, close, volume? }
+                            const mappedData = results.data.map((row, index) => {
+                                // Try common column names, case-insensitive
+                                const timeVal = row.open_time || row.timestamp || row.date || row.Time || row.Timestamp || row.Date;
+                                const openVal = row.open || row.Open;
+                                const highVal = row.high || row.High;
+                                const lowVal = row.low || row.Low;
+                                const closeVal = row.close || row.Close;
+                                const volumeVal = row.volume !== undefined ? row.volume : (row.Volume !== undefined ? row.Volume : null); // Optional volume
+
+                                // Basic validation
+                                if (timeVal === undefined || openVal === undefined || highVal === undefined || lowVal === undefined || closeVal === undefined) {
+                                    throw new Error(`Thiếu cột OHLC hoặc Time/Date/Timestamp ở dòng ${index + 2}`); // +2 for header and 0-based index
+                                }
+                                if (typeof openVal !== 'number' || typeof highVal !== 'number' || typeof lowVal !== 'number' || typeof closeVal !== 'number') {
+                                    // Papaparse dynamicTyping might fail for some formats
+                                     throw new Error(`Dữ liệu OHLC không phải dạng số ở dòng ${index + 2}. Kiểm tra định dạng số (dấu thập phân là '.'?).`);
+                                }
+
+
+                                let timeInSeconds;
+                                // Handle time/date (Unix timestamp in ms or seconds, or date string)
+                                if (typeof timeVal === 'number') {
+                                     // Check if it's likely seconds (e.g., < 3 billion) or milliseconds
+                                     timeInSeconds = timeVal > 3000000000 ? Math.floor(timeVal / 1000) : timeVal;
+                                } else if (typeof timeVal === 'string') {
+                                     const parsedDate = new Date(timeVal);
+                                     if (!isNaN(parsedDate)) {
+                                        timeInSeconds = Math.floor(parsedDate.getTime() / 1000);
+                                    } else {
+                                        throw new Error(`Không thể phân tích định dạng thời gian '${timeVal}' ở dòng ${index + 2}`);
+                                    }
+                                } else {
+                                     throw new Error(`Định dạng thời gian không hợp lệ ở dòng ${index + 2}`);
+                                }
+
+
+                                return {
+                                    time: timeInSeconds,
+                                    open: openVal,
+                                    high: highVal,
+                                    low: lowVal,
+                                    close: closeVal,
+                                    volume: typeof volumeVal === 'number' ? volumeVal : undefined // Include volume only if it's a number
+                                };
+                            }).filter(item => item !== null) // Remove any rows that failed mapping (though error throwing is preferred)
+                              .sort((a, b) => a.time - b.time); // Ensure data is sorted by time
+
+
+                             if (mappedData.length === 0) {
+                                 throw new Error("Không có dữ liệu hợp lệ nào được tìm thấy sau khi xử lý.");
+                             }
+
+                             chartData = mappedData; // Assign processed data globally
+                             loadChartData(chartData); // Load data into chart
+                             statusArea.textContent = `Đã tải ${chartData.length} nến từ dữ liệu CSV!`;
+                             addNotification('check-circle', 'text-green-500', 'Tải thành công', `Đã tải ${chartData.length} nến.`, 'Vừa xong');
+
+                         } catch (error) {
+                            console.error("Lỗi xử lý dữ liệu CSV:", error);
+                            statusArea.textContent = `Lỗi xử lý dữ liệu: ${error.message}`;
+                            addNotification('alert-triangle', 'text-red-500', 'Lỗi Xử lý Dữ liệu', error.message, 'Vừa xong');
+                            chartData = []; // Clear data on error
+                            loadChartData([]); // Clear chart
+                         }
+                    } else {
+                        statusArea.textContent = 'Dữ liệu CSV không hợp lệ hoặc trống.';
+                        addNotification('alert-circle', 'text-yellow-500', 'CSV Trống', 'File CSV không chứa dữ liệu hợp lệ.', 'Vừa xong');
+                        chartData = [];
+                        loadChartData([]);
+                    }
+                },
+                error: function (error) { // Papaparse general error
+                    console.error("Lỗi Papaparse:", error);
+                    statusArea.textContent = `Lỗi khi xử lý dữ liệu CSV: ${error}`;
+                    addNotification('alert-triangle', 'text-red-500', 'Lỗi CSV', `Lỗi Papaparse: ${error}`, 'Vừa xong');
+                    chartData = [];
+                    loadChartData([]);
+                }
+            });
+        }
+
+        // Load data to chart and prepare indicators
+        function loadChartData(data, doReset = true) { // Added flag to prevent recursive reset
+            if (doReset) {
+                resetBacktest(); // Reset state when new data is loaded
+            }
+
+            candleSeries.setData(data); // Load data to candlestick series
+
+            if (data.length > 0) {
+                updateIndicators(); // Calculate indicators for the new data
+                playPauseBtn.disabled = false;
+                resetBtn.disabled = false;
+                updateIndicatorsBtn.disabled = false;
+                chart.timeScale().fitContent(); // Fit chart to show all data initially
+            } else {
+                // Disable controls if no data
+                playPauseBtn.disabled = true;
+                resetBtn.disabled = true;
+                updateIndicatorsBtn.disabled = true;
+                // Clear indicator lines if data is empty
+                 emaSeries.setData([]);
+                 lwmaSeries.setData([]);
+                 donchianUpperSeries.setData([]);
+                 donchianMiddleSeries.setData([]);
+                 donchianLowerSeries.setData([]);
+                 markersSeries.setMarkers([]);
+            }
+        }
+
+        // Run backtest simulation
+        function runBacktest() {
+            const baseInterval = 500; // ms for slowest speed (1%)
+            const maxSpeedFactor = 495; // Makes 100% speed interval = 500 - 495 = 5ms
+             // Map 1-100 to interval: Higher speed % => lower interval time
+             const intervalSpeed = Math.max(5, baseInterval - (playbackSpeed / 100) * maxSpeedFactor);
+
+            playbackInterval = setInterval(() => {
+                if (currentCandle >= chartData.length) {
+                    if (isPlaying) togglePlayPause(); // Stop playback if running
+                    statusArea.textContent = 'Backtest hoàn tất!';
+                    addNotification('flag', 'text-blue-500', 'Hoàn tất', 'Quá trình backtest đã chạy hết dữ liệu.', 'Vừa xong');
+                    return;
+                }
+
+                const candle = chartData[currentCandle];
+
+                 // Check trading logic *before* incrementing candle
+                checkAndExecuteTrades(candle, currentCandle);
+
+                 // Update visible range (auto-scroll chart to keep current candle visible)
+                 // Get the visible time range
+                const visibleRange = chart.timeScale().getVisibleLogicalRange();
+                if (visibleRange) {
+                     const barsInfo = candleSeries.barsInLogicalRange(visibleRange);
+                    // If the current candle index is near the right edge, scroll
+                    // Adjust the threshold (e.g., 10 bars from the right edge) as needed
+                     if (barsInfo && currentCandle >= barsInfo.barsBefore + barsInfo.barsAfter - 10) {
+                         chart.timeScale().scrollToPosition(currentCandle - Math.floor(barsInfo.barsAfter / 2), true); // Smooth scroll
+                     }
+                 }
+
+
+                statusArea.textContent = `Xử lý nến ${currentCandle + 1}/${chartData.length} - ${formatDate(candle.time)}`;
+
+                currentCandle++; // Increment candle index for the next iteration
+
+                // Update active position duration if exists
+                 if (currentPosition) {
+                     updateActivePositionUI(); // Update duration and PnL display
+                 }
+
+             }, intervalSpeed);
+        }
+
+        // Check for trading signals and execute trades
+        function checkAndExecuteTrades(candle, index) {
+            // Determine minimum data needed based on longest indicator period
+            const emaPeriod = parseInt(document.getElementById('emaPeriodInput').value) || 20;
+            const lwmaPeriod = parseInt(document.getElementById('lwmaPeriodInput').value) || 14;
+            const donchianPeriod = parseInt(document.getElementById('donchianPeriodInput').value) || 20;
+            const maxPeriod = Math.max(emaPeriod, lwmaPeriod, donchianPeriod);
+
+            if (index < maxPeriod) return; // Skip if not enough data for the longest indicator
+
+            // Get current indicator values safely
+             const emaValue = getIndicatorValue(emaSeries, candle.time);
+             const lwmaValue = getIndicatorValue(lwmaSeries, candle.time);
+             const donchianUpper = getIndicatorValue(donchianUpperSeries, candle.time);
+             const donchianMiddle = getIndicatorValue(donchianMiddleSeries, candle.time);
+             const donchianLower = getIndicatorValue(donchianLowerSeries, candle.time);
+
+             // --- Strategy Logic ---
+             // Check exit conditions FIRST for the current candle
+            if (currentPosition) {
+                if (checkForExitSignals(currentPosition, candle)) {
+                    return; // Exit happened, don't check for entry on the same candle
+                }
+            }
+
+            // If no position, check for entry conditions
+            if (!currentPosition) {
+                 // Get required indicators based on strategy
+                 const emaEnabled = document.getElementById('emaEnabled').checked;
+                 const lwmaEnabled = document.getElementById('lwmaEnabled').checked;
+                 const donchianEnabled = document.getElementById('donchianEnabled').checked;
+
+                // --- Long Entry Condition --- (Example: close > EMA and LWMA > Donchian Middle)
+                 // Ensure required indicators are enabled and have values
+                 if (emaEnabled && emaValue !== null && lwmaEnabled && lwmaValue !== null && donchianEnabled && donchianMiddle !== null) {
+                     if (candle.close > emaValue && lwmaValue > donchianMiddle) {
+                         openPosition('LONG', candle, index);
+                         return; // Opened position, done for this candle
+                     }
+                 }
+
+                 // --- Short Entry Condition --- (Example: close < EMA and LWMA < Donchian Middle)
+                 // Ensure required indicators are enabled and have values
+                 if (emaEnabled && emaValue !== null && lwmaEnabled && lwmaValue !== null && donchianEnabled && donchianMiddle !== null) {
+                     if (candle.close < emaValue && lwmaValue < donchianMiddle) {
+                         openPosition('SHORT', candle, index);
+                         return; // Opened position, done for this candle
+                     }
+                 }
+            }
+             // --- End Strategy Logic ---
+        }
+
+
+        // Open a new position
+        function openPosition(type, candle, index) {
+            const entryPrice = candle.close; // Enter at close of signal candle
+             const size = accountBalance * orderSizePercent;
+            const quantity = size / entryPrice;
+
+            if (quantity <= 0) {
+                console.warn("Order size is zero or negative, skipping trade.");
+                return;
+            }
+
+            // Calculate TP and SL levels based on percentages from UI/Variables
+            let takeProfitPrice, stopLossPrice;
+            if (type === 'LONG') {
+                takeProfitPrice = entryPrice * (1 + takeProfitPercent);
+                stopLossPrice = entryPrice * (1 - stopLossPercent);
+            } else { // SHORT
+                takeProfitPrice = entryPrice * (1 - takeProfitPercent);
+                stopLossPrice = entryPrice * (1 + stopLossPercent);
+            }
+
+             // Check if SL/TP are valid (e.g., SL not equal to entry)
+             if (stopLossPrice === entryPrice || takeProfitPrice === entryPrice) {
+                 console.warn("StopLoss or TakeProfit is equal to entry price. Skipping trade.");
+                 return;
+             }
+
+             currentPosition = {
+                type: type,
+                entryPrice: entryPrice,
+                quantity: quantity,
+                entryTime: candle.time,
+                entryIndex: index,
+                takeProfit: takeProfitPrice,
+                stopLoss: stopLossPrice
+            };
+
+             // Add entry marker
+            const markerColor = type === 'LONG' ? '#26a69a' : '#ef5350';
+            const markerShape = type === 'LONG' ? 'arrowUp' : 'arrowDown';
+            const currentMarkers = markersSeries.markers() || []; // Get existing markers
+            markersSeries.setMarkers([
+                 ...currentMarkers,
+                 {
+                    time: candle.time,
+                    position: type === 'LONG' ? 'belowBar' : 'aboveBar',
+                    color: markerColor,
+                    shape: markerShape,
+                    size: 1, // Adjust size as needed
+                    text: `${type} Entry @ ${entryPrice.toFixed(4)}`
+                }
+            ]);
+
+             updateActivePositionUI(); // Show and update the active position card
+             addNotification(
+                type === 'LONG' ? 'arrow-up-circle' : 'arrow-down-circle',
+                type === 'LONG' ? 'text-green-500' : 'text-red-500',
+                'Mở vị thế mới',
+                `${type} @ ${entryPrice.toFixed(4)} | Size: ${quantity.toFixed(4)} | TP: ${takeProfitPrice.toFixed(4)} | SL: ${stopLossPrice.toFixed(4)}`,
+                formatDate(candle.time)
+            );
+        }
+
+        // Check for position exit conditions (TP/SL) for the given candle
+        // Returns true if an exit occurred, false otherwise
+        function checkForExitSignals(position, candle) {
+            let exitPrice = null;
+            let exitReason = null;
+
+            if (position.type === 'LONG') {
+                // Check SL first (more likely to hit on a wick)
+                if (candle.low <= position.stopLoss) {
+                    exitPrice = position.stopLoss; // Assume worst case execution
+                    exitReason = 'SL';
+                }
+                 // Check TP if SL not hit
+                else if (candle.high >= position.takeProfit) {
+                    exitPrice = position.takeProfit;
+                    exitReason = 'TP';
+                }
+            } else { // SHORT
+                 // Check SL first
+                if (candle.high >= position.stopLoss) {
+                    exitPrice = position.stopLoss; // Assume worst case
+                    exitReason = 'SL';
+                }
+                 // Check TP if SL not hit
+                else if (candle.low <= position.takeProfit) {
+                    exitPrice = position.takeProfit;
+                    exitReason = 'TP';
+                }
+            }
+
+             if (exitReason && exitPrice !== null) {
+                 const pnl = calculatePnL(position, exitPrice);
+                 closePosition(position, candle, exitPrice, exitReason, pnl);
+                 return true; // Exit occurred
+             }
+
+             // If no exit, update floating P&L for the active position card
+             updateActivePositionUI(candle.close); // Pass current close price
+             return false; // No exit
+        }
+
+        // Close a position
+        function closePosition(position, exitCandle, exitPrice, exitReason, pnl) {
+            const pnlPercent = (pnl / (position.entryPrice * position.quantity)) * 100; // PnL % based on initial risk/entry value
+            const tradeDuration = Math.floor((exitCandle.time - position.entryTime) / 60); // Duration in minutes
+
+            const trade = {
+                id: trades.length + 1,
+                type: position.type,
+                entryPrice: position.entryPrice,
+                exitPrice: exitPrice,
+                exitReason: exitReason,
+                pnl: pnl,
+                pnlPercent: pnlPercent,
+                entryTime: position.entryTime,
+                exitTime: exitCandle.time,
+                duration: tradeDuration
+            };
+
+            trades.push(trade);
+            accountBalance += pnl; // Update balance
+
+            // Add exit marker
+             const markerColor = exitReason === 'TP' ? '#2962ff' : '#fbc02d'; // Blue for TP, Amber for SL
+             const currentMarkers = markersSeries.markers() || [];
+             markersSeries.setMarkers([
+                 ...currentMarkers,
+                 {
+                    time: exitCandle.time,
+                    position: position.type === 'LONG' ? 'aboveBar' : 'belowBar',
+                    color: markerColor,
+                    shape: 'circle',
+                    size: 0.8,
+                    text: `${exitReason} @ ${exitPrice.toFixed(4)} (${pnlPercent >= 0 ? '+' : ''}${pnlPercent.toFixed(2)}%)`
+                 }
+             ]);
+
+
+             updateMetrics(trade); // Recalculate performance metrics
+             updateTradeHistoryTable(trade); // Add row to trade history
+             updateStats(); // Update overall stats UI
+
+            // Add notification
+             addNotification(
+                exitReason === 'TP' ? 'check-circle' : 'x-circle',
+                exitReason === 'TP' ? 'text-green-500' : 'text-red-500',
+                `Đóng vị thế (${exitReason})`,
+                `${position.type} ${exitReason} @ ${exitPrice.toFixed(4)}. PnL: ${pnl.toFixed(2)} (${pnlPercent.toFixed(2)}%)`,
+                formatDate(exitCandle.time)
+            );
+
+             currentPosition = null; // Clear current position
+             if (activePositionCard) activePositionCard.style.display = 'none'; // Hide active position card
+        }
+
+        // Calculate P&L for a position
+        function calculatePnL(position, currentPrice) {
+            const direction = position.type === 'LONG' ? 1 : -1;
+            return direction * (currentPrice - position.entryPrice) * position.quantity;
+        }
+
+        // Update performance metrics object
+        function updateMetrics(trade) {
+            metrics.totalTrades++;
+            if (trade.pnl > 0) metrics.winningTrades++;
+            else metrics.losingTrades++;
+
+            metrics.grossProfit += Math.max(0, trade.pnl);
+            metrics.grossLoss += Math.abs(Math.min(0, trade.pnl));
+
+            if (trade.type === 'LONG') metrics.longTrades++;
+            else metrics.shortTrades++;
+
+            if (trade.exitReason === 'TP') metrics.tpHits++;
+            else if (trade.exitReason === 'SL') metrics.slHits++;
+
+            // Update peak balance for drawdown calculation
+            if (accountBalance > metrics.peakBalance) {
+                metrics.peakBalance = accountBalance;
+            }
+            // Calculate current drawdown from peak
+            const currentDrawdown = metrics.peakBalance > 0 ? ((metrics.peakBalance - accountBalance) / metrics.peakBalance) * 100 : 0;
+             // Update max drawdown if current drawdown is larger
+             metrics.maxDrawdown = Math.max(metrics.maxDrawdown, currentDrawdown);
+
+             // Calculate derived metrics
+             metrics.winRate = metrics.totalTrades > 0 ? (metrics.winningTrades / metrics.totalTrades) * 100 : 0;
+             metrics.profitFactor = metrics.grossLoss > 0 ? metrics.grossProfit / metrics.grossLoss : (metrics.grossProfit > 0 ? Infinity : 0);
+        }
+
+
+        // Update trade history table in UI
+        function updateTradeHistoryTable(trade) {
+             if (!tradeHistoryBody) return;
+             const row = tradeHistoryBody.insertRow(0); // Insert at the top
+             row.innerHTML = `
+                <td>${trade.id}</td>
+                <td><span class="trade-badge trade-${trade.type.toLowerCase()}">${trade.type}</span></td>
+                <td>${trade.entryPrice.toFixed(4)}</td>
+                <td>${trade.exitPrice.toFixed(4)}</td>
+                <td>${trade.exitReason}</td>
+                <td class="${trade.pnl >= 0 ? 'positive' : 'negative'}">${trade.pnl >= 0 ? '+' : ''}${trade.pnlPercent.toFixed(2)}%</td>
+                <td>${formatDuration(trade.duration)}</td>
+            `;
+        }
+
+        // Update performance stats in UI
+        function updateStats() {
+             if (currentBalanceEl) currentBalanceEl.textContent = `${accountBalance.toFixed(2)} USDT`;
+
+             const profitPct = initialBalance > 0 ? ((accountBalance / initialBalance) - 1) * 100 : 0;
+             if (profitPercentageEl) {
+                profitPercentageEl.textContent = `${profitPct >= 0 ? '+' : ''}${profitPct.toFixed(2)}%`;
+                profitPercentageEl.className = `text-xl font-bold ${profitPct >= 0 ? 'text-green-500' : 'text-red-500'}`;
+            }
+
+             if (metricTotalTradesEl) metricTotalTradesEl.textContent = metrics.totalTrades;
+             if (metricWinRateEl) {
+                 metricWinRateEl.textContent = `${metrics.winRate.toFixed(1)}%`;
+                 metricWinRateEl.className = `metric-value ${metrics.winRate >= 50 ? 'positive' : 'negative'}`;
+             }
+             if (metricProfitFactorEl) {
+                 const pf = metrics.profitFactor === Infinity ? "∞" : metrics.profitFactor.toFixed(2);
+                 metricProfitFactorEl.textContent = pf;
+                 metricProfitFactorEl.className = `metric-value ${metrics.profitFactor >= 1 || metrics.profitFactor === Infinity ? 'positive' : 'negative'}`;
+             }
+             if (metricMaxDrawdownEl) metricMaxDrawdownEl.textContent = `-${metrics.maxDrawdown.toFixed(1)}%`;
+
+             // Update ratios
+             if (longShortCountsEl) longShortCountsEl.textContent = `${metrics.longTrades} / ${metrics.shortTrades}`;
+             const totalDirTrades = metrics.longTrades + metrics.shortTrades;
+             if (longShortRatioBarEl && shortLongRatioBarEl && totalDirTrades > 0) {
+                 const longRatio = (metrics.longTrades / totalDirTrades) * 100;
+                 longShortRatioBarEl.style.width = `${longRatio}%`;
+                 shortLongRatioBarEl.style.width = `${100 - longRatio}%`;
+             } else if (longShortRatioBarEl && shortLongRatioBarEl) { // Reset if no trades
+                 longShortRatioBarEl.style.width = '50%';
+                 shortLongRatioBarEl.style.width = '50%';
+             }
+
+
+             if (tpSlCountsEl) tpSlCountsEl.textContent = `${metrics.tpHits} / ${metrics.slHits}`;
+             const totalOutcomes = metrics.tpHits + metrics.slHits;
+             if (tpSlRatioBarEl && slTpRatioBarEl && totalOutcomes > 0) {
+                 const tpRatio = (metrics.tpHits / totalOutcomes) * 100;
+                 tpSlRatioBarEl.style.width = `${tpRatio}%`;
+                 slTpRatioBarEl.style.width = `${100 - tpRatio}%`;
+             } else if (tpSlRatioBarEl && slTpRatioBarEl) { // Reset if no trades
+                 tpSlRatioBarEl.style.width = '50%';
+                 slTpRatioBarEl.style.width = '50%';
+             }
+
+            if (tradeCountEl) tradeCountEl.textContent = metrics.totalTrades;
+        }
+
+
+        // Update active position UI card
+        function updateActivePositionUI(currentPrice = null) { // Pass current price for PnL calculation
+            if (!currentPosition || !activePositionCard) return;
+
+            activePositionCard.style.display = 'block'; // Show the card
+
+            if (activePosBadge) {
+                activePosBadge.className = `trade-badge trade-${currentPosition.type.toLowerCase()}`;
+                activePosBadge.textContent = currentPosition.type;
+            }
+            if (activePosEntry) activePosEntry.textContent = `${currentPosition.entryPrice.toFixed(4)} USDT`;
+            if (activePosTp) activePosTp.textContent = `${currentPosition.takeProfit.toFixed(4)} USDT`;
+            if (activePosSl) activePosSl.textContent = `${currentPosition.stopLoss.toFixed(4)} USDT`;
+
+            // Calculate and display duration
+            const nowSeconds = isPlaying ? chartData[currentCandle]?.time : Math.floor(Date.now() / 1000); // Use candle time if playing
+             const durationMinutes = nowSeconds ? Math.max(0, Math.floor((nowSeconds - currentPosition.entryTime) / 60)) : 0;
+             if (activePosDuration) activePosDuration.textContent = formatDuration(durationMinutes);
+
+
+            // Calculate and display floating P&L if currentPrice is provided
+             if (currentPrice !== null && activePosPnl && activePosProgress) {
+                 const floatingPnl = calculatePnL(currentPosition, currentPrice);
+                 const pnlPercent = (floatingPnl / (currentPosition.entryPrice * currentPosition.quantity)) * 100;
+
+                 activePosPnl.textContent = `${pnlPercent >= 0 ? '+' : ''}${pnlPercent.toFixed(2)}%`;
+                 activePosPnl.className = `font-medium ${pnlPercent >= 0 ? 'text-green-500' : 'text-red-500'}`;
+
+
+                // Calculate progress towards TP/SL
+                let progressPct = 0;
+                if (currentPosition.type === 'LONG') {
+                     if (currentPrice >= currentPosition.takeProfit) progressPct = 100;
+                     else if (currentPrice <= currentPosition.stopLoss) progressPct = 0; // Or handle negative progress visually if needed
+                     else if (currentPosition.takeProfit > currentPosition.entryPrice) { // Avoid division by zero
+                        progressPct = ((currentPrice - currentPosition.entryPrice) / (currentPosition.takeProfit - currentPosition.entryPrice)) * 100;
+                     }
+                 } else { // SHORT
+                     if (currentPrice <= currentPosition.takeProfit) progressPct = 100;
+                     else if (currentPrice >= currentPosition.stopLoss) progressPct = 0;
+                     else if (currentPosition.entryPrice > currentPosition.takeProfit) { // Avoid division by zero
+                        progressPct = ((currentPosition.entryPrice - currentPrice) / (currentPosition.entryPrice - currentPosition.takeProfit)) * 100;
+                     }
+                 }
+                 progressPct = Math.min(100, Math.max(0, progressPct)); // Clamp between 0 and 100
+
+                 activePosProgress.style.width = `${progressPct}%`;
+                 activePosProgress.className = `h-2 rounded-full ${pnlPercent >= 0 ? 'bg-green-500' : 'bg-red-500'}`;
+             }
+        }
+
+
+        // Add notification to UI
+        function addNotification(iconName, iconClass, title, message, time) {
+            if (!notificationArea) return;
+
+            const notification = document.createElement('div');
+            notification.className = 'notification-item';
+
+            // Create icon element dynamically
+             const iconElement = document.createElement('i');
+             iconElement.dataset.lucide = iconName;
+             iconElement.className = `h-5 w-5 ${iconClass} flex-shrink-0 mt-1`; // Added flex-shrink-0 and margin
+
+            notification.appendChild(iconElement);
+
+            // Create text content div
+            const textDiv = document.createElement('div');
+            textDiv.innerHTML = `
+                <div class="font-medium">${title}</div>
+                <div class="text-sm text-gray-400">${message}</div>
+                <div class="text-xs text-gray-500">${time}</div>
+            `;
+            notification.appendChild(textDiv);
+
+
+            notificationArea.prepend(notification); // Add at the top
+
+            lucide.createIcons({ icons: { [iconName]: iconElement } }); // Initialize only the new icon
+
+            // Limit to e.g., 10 notifications
+            const maxNotifications = 10;
+            while (notificationArea.children.length > maxNotifications) {
+                notificationArea.removeChild(notificationArea.lastChild);
+            }
+        }
+
+
+        // Helper function to get indicator value for a specific time
+        function getIndicatorValue(series, time) {
+             // Lightweight Charts series data is often accessed via internal methods or by keeping a separate copy.
+             // A simpler approach for this backtester is to re-calculate or look up from the calculated data array.
+             // Let's find the data point in the pre-calculated array.
+             let indicatorData;
+             if (series === emaSeries) indicatorData = calculateEMA(chartData, parseInt(document.getElementById('emaPeriodInput').value));
+             else if (series === lwmaSeries) {
+                 const lwmaWeightsStr = document.getElementById('lwmaWeightsInput').value;
+                 const weights = lwmaWeightsStr.split(',').map(w => parseFloat(w.trim())).filter(w => !isNaN(w));
+                 if (weights.length > 1) indicatorData = calculateCustomLWMA(chartData, weights);
+                 else indicatorData = calculateLWMA(chartData, parseInt(document.getElementById('lwmaPeriodInput').value));
+             }
+             else if (series === donchianUpperSeries || series === donchianMiddleSeries || series === donchianLowerSeries) {
+                 const donchianData = calculateDonchian(chartData, parseInt(document.getElementById('donchianPeriodInput').value));
+                 if (series === donchianUpperSeries) indicatorData = donchianData.upper;
+                 else if (series === donchianMiddleSeries) indicatorData = donchianData.middle;
+                 else indicatorData = donchianData.lower;
+             }
+             else return null; // Unknown series
+
+
+             if (!indicatorData || indicatorData.length === 0) return null;
+
+
+             // Find the data point whose time is less than or equal to the candle's time
+             let bestMatch = null;
+             for (let i = indicatorData.length - 1; i >= 0; i--) {
+                 if (indicatorData[i].time <= time) {
+                    bestMatch = indicatorData[i];
+                    break; // Found the latest value at or before the candle time
+                 }
+             }
+
+             return bestMatch ? bestMatch.value : null;
+        }
+
+        // Helper function to format date/time
+        function formatDate(timestamp) {
+            if (!timestamp) return 'N/A';
+            const date = new Date(timestamp * 1000);
+            return date.toLocaleString('vi-VN', {
+                day: '2-digit', month: '2-digit', year: 'numeric',
+                hour: '2-digit', minute: '2-digit'
+            });
+        }
+
+        // Helper function to format duration
+        function formatDuration(minutes) {
+             if (isNaN(minutes) || minutes < 0) return '0m';
+             if (minutes < 1) return '< 1m';
+             if (minutes < 60) return `${Math.round(minutes)}m`;
+             if (minutes < 1440) { // Less than a day
+                const hours = Math.floor(minutes / 60);
+                const mins = Math.round(minutes % 60);
+                return `${hours}h ${mins}m`;
+            } else { // Days
+                const days = Math.floor(minutes / 1440);
+                const hours = Math.floor((minutes % 1440) / 60);
+                return `${days}d ${hours}h`;
+            }
+        }
+
+
+        // --- Technical Indicator Calculations ---
+        // Note: These are basic implementations. For accuracy, consider libraries like 'technicalindicators'.
+
+        function calculateSMA(data, period) { // Helper for EMA start
+            let smaData = [];
+            if (data.length < period) return smaData;
+            let sum = 0;
+            for(let i=0; i < period; i++) {
+                sum += data[i].close;
+            }
+            smaData.push({ time: data[period-1].time, value: sum / period });
+            for (let i = period; i < data.length; i++) {
+                sum = sum - data[i - period].close + data[i].close;
+                smaData.push({ time: data[i].time, value: sum / period });
+            }
+            return smaData;
+        }
+
+        function calculateEMA(data, period) {
+            if (period < 2 || data.length < period) return [];
+            const k = 2 / (period + 1);
+            let emaData = [];
+             // Start EMA calculation after the first 'period' bars using SMA as the first EMA value
+             const initialSma = calculateSMA(data.slice(0, period), period);
+             if (initialSma.length === 0) return []; // Should not happen if period >=2 and data.length >= period
+
+             let lastEma = initialSma[0].value;
+             emaData.push({ time: data[period - 1].time, value: lastEma });
+
+
+             for (let i = period; i < data.length; i++) {
+                 lastEma = data[i].close * k + lastEma * (1 - k);
+                 emaData.push({ time: data[i].time, value: lastEma });
+             }
+             return emaData;
+        }
+
+
+        function calculateLWMA(data, period) {
+            if (period < 2 || data.length < period) return [];
+            let lwmaData = [];
+            const weightSum = (period * (period + 1)) / 2; // Sum of weights 1 to period
+
+            for (let i = period - 1; i < data.length; i++) {
+                let sum = 0;
+                for (let j = 0; j < period; j++) {
+                    const weight = period - j;
+                    sum += data[i - j].close * weight;
+                }
+                lwmaData.push({ time: data[i].time, value: sum / weightSum });
+            }
+            return lwmaData;
+        }
+
+        function calculateCustomLWMA(data, weights) {
+            const period = weights.length;
+            if (period < 2 || data.length < period) return [];
+            let lwmaData = [];
+            const weightSum = weights.reduce((sum, w) => sum + w, 0);
+            if (weightSum === 0) return []; // Avoid division by zero
+
+             for (let i = period - 1; i < data.length; i++) {
+                let sum = 0;
+                 // Apply weights - Note: weights array index corresponds to how far back the data point is
+                 for (let j = 0; j < period; j++) {
+                     // weights[0] applies to data[i], weights[1] to data[i-1], etc.
+                    sum += data[i - j].close * weights[j];
+                 }
+                lwmaData.push({ time: data[i].time, value: sum / weightSum });
+            }
+            return lwmaData;
+        }
+
+
+        function calculateDonchian(data, period) {
+            if (period < 2 || data.length < period) return { upper: [], middle: [], lower: [] };
+            let upperData = [], middleData = [], lowerData = [];
+
+             for (let i = period - 1; i < data.length; i++) {
+                 let highest = -Infinity;
+                 let lowest = Infinity;
+                 // Look back 'period' bars including the current one (i-period+1 to i)
+                 for (let j = i - period + 1; j <= i; j++) {
+                     highest = Math.max(highest, data[j].high);
+                     lowest = Math.min(lowest, data[j].low);
+                 }
+                upperData.push({ time: data[i].time, value: highest });
+                lowerData.push({ time: data[i].time, value: lowest });
+                middleData.push({ time: data[i].time, value: (highest + lowest) / 2 });
+            }
+            return { upper: upperData, middle: middleData, lower: lowerData };
+        }
+
+
+        // --- Initialization ---
+        function generateSampleData() { /* ... (keep existing sample data generation) ... */
+            const data = [];
+            let price = 100;
+            const startTime = Math.floor(Date.now() / 1000) - 200 * 15 * 60; // 200 candles of 15min back
+
+            for (let i = 0; i < 200; i++) {
+                const time = startTime + i * 15 * 60; // 15 min interval
+                const open = price;
+                const high = open * (1 + (Math.random() - 0.1) * 0.01); // Smaller volatility
+                const low = open * (1 - (Math.random() - 0.1) * 0.01);
+                const close = low + Math.random() * (high - low);
+                price = close * (1 + (Math.random() - 0.5) * 0.005); // Next price drift
+                price = Math.max(1, price); // Ensure price doesn't go below 1
+
+                data.push({ time, open, high, low, close, volume: Math.floor(Math.random() * 10000) + 1000 });
+            }
+            return data;
+        }
+
+        function init() {
+             initEventListeners();
+             chartData = generateSampleData();
+             loadChartData(chartData);
+             statusArea.textContent = "Hệ thống backtest đã sẵn sàng. Tải dữ liệu CSV hoặc nhấn 'Bắt đầu' để chạy với dữ liệu mẫu.";
+             addNotification('info', 'text-blue-500', 'Sẵn sàng', 'Hệ thống đã tải dữ liệu mẫu. Bạn có thể bắt đầu backtest.', 'Vừa xong');
+             updateStats(); // Ensure initial stats display correctly
+        }
+
+        document.addEventListener('DOMContentLoaded', init);
+
+    </script>
+</body>
+
+</html>

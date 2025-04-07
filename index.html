@@ -1,405 +1,109 @@
 <!DOCTYPE html>
-<html lang="vi">
+<html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Phân tích OHLCV (Bootstrap & Lightweight Charts)</title>
+    <title>Crypto Analytics Dashboard</title>
+    <script src="lightweight-charts.standalone.production.js"></script>
+    <link rel="stylesheet" href="style.css">
 
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
-
-    <script src="https://unpkg.com/lightweight-charts/dist/lightweight-charts.standalone.production.js"></script>
-
-    <script src="bundle.min.js"></script>
-
-    <style>
-        body {
-            background-color: #f8f9fa; /* Màu nền nhẹ nhàng hơn */
-        }
-        /* Giữ lại style cần thiết cho chart container */
-        #chartContainer {
-            width: 100%; /* Để Bootstrap quản lý chiều rộng */
-            height: 600px; /* Tăng chiều cao một chút */
-            background-color: #ffffff;
-            border: 1px solid #dee2e6;
-            border-radius: 0.375rem; /* Bo góc theo Bootstrap */
-            box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075); /* Thêm bóng đổ nhẹ */
-        }
-        .controls-card {
-            margin-bottom: 1.5rem; /* Tăng khoảng cách dưới */
-        }
-    </style>
 </head>
+
 <body>
-
-    <div class="container mt-4">
-        <h1 class="mb-4 text-center text-primary">Phân tích Dữ liệu OHLCV</h1>
-
-        <div class="card controls-card shadow-sm">
-            <div class="card-body">
-                <div class="row g-3 align-items-end"> 
-                    <div class="col-md-3 col-sm-6">
-                        <label for="symbolInput" class="form-label">Symbol:</label>
-                        <input type="text" class="form-control" id="symbolInput" value="IMXUSDT">
-                    </div>
-                    <div class="col-md-3 col-sm-6">
-                        <label for="timeframeInput" class="form-label">Timeframe:</label>
-                        <input type="text" class="form-control" id="timeframeInput" value="15m">
-                    </div>
-                    <div class="col-md-3 col-sm-6">
-                        <label for="limitInput" class="form-label">Limit (số nến):</label>
-                        <input type="number" class="form-control" id="limitInput" value="2000" min="1">
-                    </div>
-                    <div class="col-md-3 col-sm-6 d-grid"> 
-                        <button id="loadDataBtn" class="btn btn-primary">Tải và Vẽ Biểu Đồ</button>
-                    </div>
+    <div class="dashboard-container">
+        <!-- Main Content -->
+        <div class="main-content">
+            <!-- Control Panel -->
+            <div class="control-panel">
+                <div class="input-group">
+                    <label>Trading Pair</label>
+                    <input type="text" id="symbol" value="IMXUSDT">
                 </div>
+                <div class="input-group">
+                    <label>Time Frame</label>
+                    <select id="timeframe">
+                        <option>15m</option>
+                    </select>
+                </div>
+                <div class="input-group">
+                    <label>Data Points</label>
+                    <input type="number" id="limit" value="10000">
+                </div>
+                <button id="loadChartBtn">Update Chart</button>
+            </div>
+
+            <!-- Main Chart -->
+            <div class="chart-container">
+                <div id="main-chart"></div>
+               
             </div>
         </div>
-
-        <div id="loadingDiv" class="alert alert-info" style="display: none;" role="alert">
-            <div class="spinner-border spinner-border-sm me-2" role="status">
-                <span class="visually-hidden">Loading...</span>
-            </div>
-            Đang tải dữ liệu...
-        </div>
-        <div id="errorDiv" class="alert alert-danger" style="display: none;" role="alert">
-            </div>
-
-        <div id="chartContainer" class="mb-4"></div>
-
-    </div> <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js" integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
+    </div>
 
     <script>
-        // === JavaScript giữ nguyên từ phiên bản trước ===
-        const symbolInput = document.getElementById('symbolInput');
-        const timeframeInput = document.getElementById('timeframeInput');
-        const limitInput = document.getElementById('limitInput');
-        const loadDataBtn = document.getElementById('loadDataBtn');
-        const chartContainer = document.getElementById('chartContainer');
-        const errorDiv = document.getElementById('errorDiv');
-        const loadingDiv = document.getElementById('loadingDiv');
-
-        let chart = null;
+        // Enhanced Chart Initialization
+        let mainChart = null;
         let candlestickSeries = null;
-        let resizeObserver = null; // Biến để lưu trữ ResizeObserver
 
-        // Hàm định dạng lại dữ liệu từ format columnar sang row-based cho Lightweight Charts
-        function formatDataForChart(columnarData) {
-            const formatted = [];
-            
-            const times = columnarData.open_time;
-            const opens = columnarData.open;
-            const highs = columnarData.high;
-            const lows = columnarData.low;
-            const closes = columnarData.close;
-
-            // Giả sử tất cả các mảng cột có cùng độ dài
-            const numberOfRows = times.length;
-
-            if (numberOfRows === 0 ||
-                opens.length !== numberOfRows ||
-                highs.length !== numberOfRows ||
-                lows.length !== numberOfRows ||
-                closes.length !== numberOfRows) {
-                 console.error("Các cột dữ liệu OHLC không có cùng độ dài.");
-                 return [];
-            }
-
-            for (let i = 0; i < numberOfRows; i++) {
-                // Chuyển đổi 'YYYY-MM-DD HH:MM:SS' sang timestamp UNIX (giây) UTC
-                const timeString = times[i];
-                // Thử nhiều định dạng phổ biến nếu cần
-                let date;
-                // Ưu tiên định dạng có 'T' và 'Z'
-                if (timeString.includes('T') && timeString.includes('Z')) {
-                    date = new Date(timeString);
-                } else if (timeString.includes(' ')) {
-                    // Thử thay ' ' bằng 'T' và thêm 'Z'
-                    date = new Date(timeString.replace(' ', 'T') + 'Z');
-                } else {
-                    // Thử parse trực tiếp (ít tin cậy hơn cho UTC)
-                    date = new Date(timeString);
+        async function initializeCharts() {
+            mainChart = LightweightCharts.createChart(document.getElementById('main-chart'), {
+                layout: {
+                    background: { color: 'transparent' },
+                    textColor: '#67748e',
+                },
+                grid: {
+                    vertLines: { visible: false },
+                    horzLines: { color: '#f5f6fa' },
+                },
+                timeScale: {
+                    borderColor: '#e0e0e0',
+                },
+                priceScale: {
+                    borderColor: '#e0e0e0',
+                    autoScale: true,
                 }
+            });
 
-                const timestamp = Math.floor(date.getTime() / 1000);
-
-                // Kiểm tra timestamp hợp lệ
-                if (isNaN(timestamp)) {
-                    console.warn(`Không thể parse thời gian tại dòng ${i}: ${timeString}. Bỏ qua dòng này.`);
-                    continue; // Bỏ qua dòng này nếu thời gian không hợp lệ
-                }
-
-                const openVal = parseFloat(opens[i]);
-                const highVal = parseFloat(highs[i]);
-                const lowVal = parseFloat(lows[i]);
-                const closeVal = parseFloat(closes[i]);
-
-                 // Kiểm tra giá trị OHLC hợp lệ
-                 if (isNaN(openVal) || isNaN(highVal) || isNaN(lowVal) || isNaN(closeVal)) {
-                    console.warn(`Giá trị OHLC không hợp lệ tại dòng ${i}: O=${opens[i]}, H=${highs[i]}, L=${lows[i]}, C=${closes[i]}. Bỏ qua dòng này.`);
-                    continue; // Bỏ qua nếu có giá trị NaN
-                 }
-
-                formatted.push({
-                    time: timestamp,
-                    open: openVal,
-                    high: highVal,
-                    low: lowVal,
-                    close: closeVal
-                });
-            }
-
-            // Sắp xếp lại theo thời gian để đảm bảo (mặc dù thường đã được sắp xếp)
-            return formatted.sort((a, b) => a.time - b.time);
+            candlestickSeries = mainChart.addSeries(LightweightCharts.CandlestickSeries);
         }
 
-        async function fetchDataAndPlot() {
-            const symbol = symbolInput.value.trim().toUpperCase(); // Chuẩn hóa symbol thành chữ hoa
-            const timeframe = timeframeInput.value.trim().toLowerCase();
-            const limit = limitInput.value.trim();
-            errorDiv.style.display = 'none'; // Ẩn lỗi cũ
-            errorDiv.textContent = '';
-            loadingDiv.style.display = 'block'; // Hiển thị loading
-
-            // Ngắt kết nối ResizeObserver cũ trước khi xóa chart
-            if (resizeObserver && chartContainer) {
-                resizeObserver.unobserve(chartContainer);
-                resizeObserver = null; // Đặt lại biến
-            }
-
-            // Xóa biểu đồ cũ nếu đang vẽ lại
-            if (chart) {
-                chart.remove();
-                chart = null;
-                candlestickSeries = null;
-            }
-            // Xóa nội dung container cũ trước khi vẽ mới (đề phòng)
-            // Không cần thiết nếu chart.remove() hoạt động đúng
-            // chartContainer.innerHTML = '';
-
-            if (!symbol || !timeframe) {
-                errorDiv.textContent = 'Vui lòng nhập Symbol và Timeframe.';
-                errorDiv.style.display = 'block';
-                loadingDiv.style.display = 'none';
-                return;
-            }
-
-            let apiUrl = `/api/ohlcv/${symbol}/${timeframe}`;
-            if (limit && parseInt(limit) > 0) {
-                apiUrl += `?limit=${limit}`;
-            }
-
-            console.log(`Đang gọi API: ${apiUrl}`);
-
+        // Data Loading Logic
+        async function loadData() {
             try {
-                const response = await fetch(apiUrl);
-                console.log('Trạng thái phản hồi:', response.status, response.statusText);
+                const symbol = document.getElementById('symbol');
+                const timeframe = document.getElementById('timeframe');
+                const limit = document.getElementById('limit');
 
-                // Kiểm tra kiểu nội dung trước khi parse JSON
-                const contentType = response.headers.get("content-type");
-                let rawData;
+                const response = await fetch(`/ohlcv?symbol=${symbol.value}&timeframe=${timeframe.value}&limit=${limit.value}`);
+                const data = await response.json();
+                let data1 = data.map(item => {
+                    let time = new Date(item.open_time);
 
-                if (!response.ok) {
-                    let errorMsg = `Lỗi ${response.status}: ${response.statusText}`;
-                    // Cố gắng đọc lỗi chi tiết nếu là JSON
-                    if (contentType && contentType.includes("application/json")) {
-                        try {
-                            const errorData = await response.json();
-                            errorMsg = errorData.error || errorData.message || JSON.stringify(errorData);
-                        } catch (jsonError) {
-                            console.error("Không thể parse lỗi JSON:", jsonError);
-                            // Nếu không parse được JSON lỗi, thử đọc text
-                            try {
-                                errorMsg = await response.text();
-                            } catch (textError) {
-                                console.error("Không thể đọc lỗi text:", textError);
-                            }
-                        }
-                    } else {
-                        // Nếu không phải JSON, đọc text
-                         try {
-                            errorMsg = await response.text();
-                        } catch (textError) {
-                            console.error("Không thể đọc lỗi text:", textError);
-                        }
-                    }
-                    throw new Error(errorMsg);
-                }
-
-                // Parse dữ liệu thành công
-                 if (contentType && contentType.includes("application/json")) {
-                     rawData = await response.json();
-                 } else {
-                     // Nếu API trả về kiểu khác JSON mà bạn mong đợi, xử lý ở đây
-                     throw new Error("Định dạng phản hồi không phải JSON.");
-                 }
-
-                console.log('Dữ liệu thô nhận được:', Array.isArray(rawData) ? rawData.length : 'Không phải mảng', 'dòng/mục');
-
-                // Kiểm tra lại rawData sau khi parse
-                if (!Array.isArray(rawData)) {
-                     // Nếu API trả về object thay vì array (ví dụ: { data: [...] })
-                     // thì cần điều chỉnh để lấy đúng mảng dữ liệu
-                     // Ví dụ: rawData = rawData.data; (nếu cấu trúc là { data: [...] })
-                     // Nếu không phải mảng và không có cấu trúc dự kiến, báo lỗi
-                     throw new Error('Dữ liệu nhận được không phải là một mảng.');
-                }
-
-                if (rawData.length === 0) {
-                    errorDiv.textContent = 'Không có dữ liệu để hiển thị.';
-                    errorDiv.style.display = 'block';
-                    loadingDiv.style.display = 'none';
-                    return;
-                }
-
-                // --- Sử dụng Danfo.js (nếu bundle.min.js chứa nó) ---
-                let formattedData;
-                try {
-                    // Giả định API trả về đúng định dạng Danfo có thể đọc trực tiếp
-                    const df = new dfd.DataFrame(rawData);
-                    // Chuyển đổi sang định dạng cột để formatDataForChart xử lý
-                    const columnarJson = dfd.toJSON(df, { format: "column" });
-                    formattedData = formatDataForChart(columnarJson);
-                } catch (danfoError) {
-                     console.error("Lỗi khi xử lý dữ liệu bằng Danfo.js:", danfoError);
-                     // Thử format trực tiếp nếu Danfo lỗi (phòng trường hợp bundle thiếu)
-                     console.log("Thử format dữ liệu trực tiếp không qua Danfo...");
-                     // Cần đảm bảo rawData là mảng các object {open_time, open, high, low, close}
-                     // Nếu rawData có cấu trúc khác, cần điều chỉnh hàm formatDataForChart
-                     // hoặc chuẩn bị dữ liệu trước khi gọi nó.
-                     // Giả sử rawData là mảng các object, cần chuyển nó sang dạng cột:
-                     const columnarDirect = {
-                         open_time: rawData.map(item => item.open_time),
-                         open: rawData.map(item => item.open),
-                         high: rawData.map(item => item.high),
-                         low: rawData.map(item => item.low),
-                         close: rawData.map(item => item.close),
-                     };
-                     formattedData = formatDataForChart(columnarDirect);
-
-                     // Nếu vẫn lỗi sau khi thử format trực tiếp, báo lỗi cuối cùng
-                     if (!formattedData || formattedData.length === 0) {
-                         throw new Error("Không thể xử lý hoặc định dạng dữ liệu nhận được.");
-                     }
-                     console.log("Format trực tiếp thành công.");
-                }
-
-
-                if (formattedData.length === 0) {
-                     errorDiv.textContent = 'Dữ liệu sau khi định dạng bị rỗng hoặc không hợp lệ.';
-                     errorDiv.style.display = 'block';
-                     loadingDiv.style.display = 'none';
-                     return;
-                }
-
-                console.log('Dữ liệu đã định dạng cho biểu đồ:', formattedData.length, 'điểm dữ liệu');
-
-                // Tạo biểu đồ Lightweight Charts
-                chart = LightweightCharts.createChart(chartContainer, {
-                    width: chartContainer.clientWidth,
-                    height: chartContainer.clientHeight,
-                    layout: {
-                        background: { color: '#ffffff' },
-                        textColor: '#333',
-                    },
-                    grid: {
-                        vertLines: { color: '#e1e1e1' },
-                        horzLines: { color: '#e1e1e1' },
-                    },
-                    crosshair: {
-                        mode: LightweightCharts.CrosshairMode.Normal,
-                    },
-                    rightPriceScale: {
-                        borderColor: '#ccc',
-                    },
-                    timeScale: {
-                        borderColor: '#ccc',
-                        timeVisible: true,
-                        secondsVisible: false, 
-                    },
-                     watermark: {
-                        color: 'rgba(11, 94, 29, 0.4)',
-                        visible: true,
-                       text: `${symbol.toUpperCase()} - ${timeframe}`,
-                        fontSize: 24,
-                      horzAlign: 'left',
-                        vertAlign: 'top',
-                    },
-                });
-
-                // Thêm series Candlestick
-                candlestickSeries = chart.addSeries(LightweightCharts.CandlestickSeries);
-
-                // Đặt dữ liệu vào series
-                candlestickSeries.setData(formattedData);
-
-                // Tự động điều chỉnh khung nhìn cho vừa với dữ liệu
-                // chart.timeScale().fitContent(); // Có thể làm chart quá nhỏ nếu nhiều dữ liệu
-
-                // Phóng to một chút để dễ nhìn hơn lúc đầu
-                if (formattedData.length > 1) {
-                    const lastVisibleIndex = formattedData.length - 1;
-                    const firstVisibleIndex = Math.max(0, lastVisibleIndex - 150); // Hiển thị 150 nến cuối
-                    chart.timeScale().setVisibleRange({
-                        from: formattedData[firstVisibleIndex].time,
-                        to: formattedData[lastVisibleIndex].time,
-                    });
-                } else if (formattedData.length === 1) {
-                    // Xử lý trường hợp chỉ có 1 nến
-                    const timePoint = formattedData[0].time;
-                    // Ước lượng khoảng thời gian của 1 nến dựa trên timeframe (cần parse timeframe)
-                    let intervalSeconds = 15 * 60; // Mặc định 15 phút
-                    try {
-                        const value = parseInt(timeframe);
-                        const unit = timeframe.replace(value.toString(), '');
-                        if (unit === 'm') intervalSeconds = value * 60;
-                        else if (unit === 'h') intervalSeconds = value * 60 * 60;
-                        else if (unit === 'd') intervalSeconds = value * 24 * 60 * 60;
-                        else if (unit === 's') intervalSeconds = value;
-                    } catch (e) { console.warn("Không thể parse timeframe để ước lượng khoảng zoom cho 1 nến.") }
-
-                    chart.timeScale().setVisibleRange({
-                        from: timePoint - intervalSeconds * 5, // Lùi lại 5 khoảng
-                        to: timePoint + intervalSeconds * 5,   // Tiến tới 5 khoảng
-                    });
-                }
-
-
-                // Xử lý resize trình duyệt/container
-                resizeObserver = new ResizeObserver(entries => {
-                    const { width, height } = entries[0].contentRect;
-                    if (chart && width > 0 && height > 0) {
-                        chart.applyOptions({ width, height }); // Dùng applyOptions thay vì resize để mượt hơn
-                    }
-                });
-                resizeObserver.observe(chartContainer);
-
-
-                console.log('Vẽ biểu đồ thành công!');
+                    return {
+                        time: time.getTime() / 1000,
+                        open: parseFloat(item.open),
+                        high: parseFloat(item.high),
+                        low: parseFloat(item.low),
+                        close: parseFloat(item.close),
+                        volume: parseFloat(item.volume)
+                    };
+                })
+                data1 = data1.sort((a, b) => a.time - b.time)
+                candlestickSeries.setData(data1);
 
             } catch (error) {
-                console.error('Lỗi khi tải hoặc vẽ biểu đồ:', error);
-                errorDiv.textContent = `Đã xảy ra lỗi: ${error.message}`;
-                errorDiv.style.display = 'block';
-                 // Xóa chart nếu có lỗi xảy ra trong quá trình tạo
-                 if (chart) {
-                    chart.remove();
-                    chart = null;
-                 }
-                 // Không cần xóa nội dung container nếu chart.remove() đã chạy
-            } finally {
-                 loadingDiv.style.display = 'none'; // Ẩn loading khi hoàn tất (thành công hoặc lỗi)
+                console.error('Error loading data:', error);
             }
         }
 
-        loadDataBtn.addEventListener('click', fetchDataAndPlot);
-
-        // Tải dữ liệu lần đầu khi trang được load
-        window.addEventListener('load', () => {
-             fetchDataAndPlot();
+        // Initialize on load
+        window.addEventListener('DOMContentLoaded', () => {
+            initializeCharts();
+            loadData();
         });
-
     </script>
-
+    <script src="main.js"></script>
 </body>
+
 </html>
